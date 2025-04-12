@@ -22,7 +22,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
   String? _filePath;
   bool _isRecording = false;
   List<Map<String, String>> _friends = [
-    {'name': 'Minh', 'id': '1'},
+    {'name': 'Minh Bò tuôi', 'id': '1'},
     {'name': 'Lan', 'id': '2'},
     {'name': 'Hùng', 'id': '3'},
   ];

@@ -1,10 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart'; // Import plugin
+import 'package:permission_handler/permission_handler.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'dart:io';
 
 class VoiceScreen extends StatefulWidget {
+  final User user; // Nhận thông tin người dùng
+  final bool showLoginSuccess; // Cờ để hiển thị thông báo
+
+  VoiceScreen({required this.user, this.showLoginSuccess = false});
+
   @override
   _VoiceScreenState createState() => _VoiceScreenState();
 }
@@ -24,17 +31,24 @@ class _VoiceScreenState extends State<VoiceScreen> {
   @override
   void initState() {
     super.initState();
-    _initRecorder(); // Khởi tạo recorder
+    _initRecorder();
     _player.openPlayer();
+
+    // Hiển thị thông báo đăng nhập thành công
+    if (widget.showLoginSuccess) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Đã đăng nhập thành công!")),
+        );
+      });
+    }
   }
 
-  // Khởi tạo và kiểm tra quyền
   Future<void> _initRecorder() async {
     await _recorder.openRecorder();
-    await _requestPermissions(); // Yêu cầu quyền trước khi sử dụng
+    await _requestPermissions();
   }
 
-  // Yêu cầu quyền micro
   Future<void> _requestPermissions() async {
     var status = await Permission.microphone.status;
     if (!status.isGranted) {
@@ -43,14 +57,11 @@ class _VoiceScreenState extends State<VoiceScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Cần quyền micro để ghi âm!")),
         );
-        return;
       }
     }
   }
 
-  // Bắt đầu ghi âm
   Future<void> _startRecording() async {
-    // Kiểm tra quyền trước khi ghi
     if (await Permission.microphone.isGranted) {
       Directory dir = await getApplicationDocumentsDirectory();
       _filePath = '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.aac';
@@ -59,8 +70,6 @@ class _VoiceScreenState extends State<VoiceScreen> {
         codec: Codec.aacADTS,
       );
       setState(() => _isRecording = true);
-
-      // Tự động dừng sau 10 giây
       Future.delayed(Duration(seconds: 10), () {
         if (_isRecording) _stopRecording();
       });
@@ -69,7 +78,6 @@ class _VoiceScreenState extends State<VoiceScreen> {
     }
   }
 
-  // Dừng ghi âm và gửi
   Future<void> _stopRecording() async {
     await _recorder.stopRecorder();
     setState(() => _isRecording = false);
@@ -78,7 +86,6 @@ class _VoiceScreenState extends State<VoiceScreen> {
     }
   }
 
-  // Hiển thị dialog chọn bạn bè
   void _showFriendSelection() {
     showDialog(
       context: context,
@@ -101,11 +108,10 @@ class _VoiceScreenState extends State<VoiceScreen> {
     );
   }
 
-  // Gửi tin nhắn
   void _sendMessage(String friendId) {
     setState(() {
       _messages.add({
-        'sender': 'Tôi',
+        'sender': widget.user.displayName ?? 'Tôi', // Dùng tên người dùng
         'receiverId': friendId,
         'filePath': _filePath!,
       });
@@ -115,15 +121,38 @@ class _VoiceScreenState extends State<VoiceScreen> {
     );
   }
 
-  // Phát lại tin nhắn
   Future<void> _playMessage(String path) async {
     await _player.startPlayer(fromURI: path);
+  }
+
+  Future<void> _signOut(BuildContext context) async {
+    try {
+      await FirebaseAuth.instance.signOut();
+      await GoogleSignIn().signOut();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Đã đăng xuất")),
+      );
+    } catch (e) {
+      print("Lỗi đăng xuất: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Lỗi đăng xuất: $e")),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text("Nhắn Âm")),
+      appBar: AppBar(
+        title: Text("Nhắn Âm - ${widget.user.displayName ?? 'Người dùng'}"), // Hiển thị tên
+        actions: [
+          IconButton(
+            icon: Icon(Icons.logout),
+            onPressed: () => _signOut(context),
+            tooltip: "Đăng xuất",
+          ),
+        ],
+      ),
       body: Column(
         children: [
           Padding(

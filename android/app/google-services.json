@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "565717181881",
+    "project_id": "voicer-hcmunre",
+    "storage_bucket": "voicer-hcmunre.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:565717181881:android:747f7aa067baf5bfc40268",
+        "android_client_info": {
+          "package_name": "com.unre.voicer.voicer"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "565717181881-p2kpgecqc6s95ifiljrrfp1nfegb8ifa.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.unre.voicer.voicer",
+            "certificate_hash": "fb5a8411c5dde25d60b25261b1d6ae527b68f444"
+          }
+        },
+        {
+          "client_id": "565717181881-orgedd97ill1uphtbfu8f8uhat33bcr2.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyArSlUZAoYaj2b2G6Rw_90siZ_rXcgkqPM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "565717181881-orgedd97ill1uphtbfu8f8uhat33bcr2.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

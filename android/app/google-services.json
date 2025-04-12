@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "565717181881-d79r4rmo2fnj5dtqmsesu1pstaoqb15b.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.unre.voicer.voicer",
+            "certificate_hash": "f542ffc087428de93d9dcbb709991720a1bb6f9d"
+          }
+        },
+        {
           "client_id": "565717181881-p2kpgecqc6s95ifiljrrfp1nfegb8ifa.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {

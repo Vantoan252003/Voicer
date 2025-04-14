@@ -53,6 +53,7 @@ dev_dependencies:
   google_sign_in: ^6.3.0
   firebase_storage: ^12.3.3
   cloud_firestore: ^5.4.4
+  rxdart: ^0.27.7
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

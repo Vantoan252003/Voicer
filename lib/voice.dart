@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:rxdart/rxdart.dart';
 import 'dart:io';
 
 class VoiceScreen extends StatefulWidget {
@@ -162,12 +163,19 @@ class _VoiceScreenState extends State<VoiceScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text("Gửi cho ai?"),
-        content: StreamBuilder<QuerySnapshot>(
-          stream: _firestore
-              .collection('friendships')
-              .where('user1', isEqualTo: widget.user.uid)
-              .where('status', isEqualTo: 'accepted')
-              .snapshots(),
+        content: StreamBuilder<List<QuerySnapshot>>(
+          stream: CombineLatestStream.list([
+            _firestore
+                .collection('friendships')
+                .where('user1', isEqualTo: widget.user.uid)
+                .where('status', isEqualTo: 'accepted')
+                .snapshots(),
+            _firestore
+                .collection('friendships')
+                .where('user2', isEqualTo: widget.user.uid)
+                .where('status', isEqualTo: 'accepted')
+                .snapshots(),
+          ]),
           builder: (context, snapshot) {
             if (snapshot.hasError) {
               return Text("Lỗi: ${snapshot.error}");
@@ -175,11 +183,22 @@ class _VoiceScreenState extends State<VoiceScreen> {
             if (!snapshot.hasData) {
               return Center(child: CircularProgressIndicator());
             }
-            List<DocumentSnapshot> docs = snapshot.data!.docs;
+
+            List<DocumentSnapshot> docs = [];
+            for (var querySnapshot in snapshot.data!) {
+              docs.addAll(querySnapshot.docs);
+            }
+
+            if (docs.isEmpty) {
+              return Text("Bạn chưa có bạn bè nào!");
+            }
+
             return SingleChildScrollView(
               child: Column(
                 children: docs.map((doc) {
-                  String friendId = doc['user2'];
+                  String friendId = doc['user1'] == widget.user.uid
+                      ? doc['user2']
+                      : doc['user1'];
                   return FutureBuilder<DocumentSnapshot>(
                     future: _firestore.collection('users').doc(friendId).get(),
                     builder: (context, userSnapshot) {
@@ -309,6 +328,73 @@ class _VoiceScreenState extends State<VoiceScreen> {
                   child: Text("Thêm bạn"),
                 ),
               ],
+            ),
+          ),
+          // Phần hiển thị danh sách bạn bè
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16.0),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                "Danh sách bạn bè",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+          SizedBox(
+            height: 100,
+            child: StreamBuilder<List<QuerySnapshot>>(
+              stream: CombineLatestStream.list([
+                _firestore
+                    .collection('friendships')
+                    .where('user1', isEqualTo: widget.user.uid)
+                    .where('status', isEqualTo: 'accepted')
+                    .snapshots(),
+                _firestore
+                    .collection('friendships')
+                    .where('user2', isEqualTo: widget.user.uid)
+                    .where('status', isEqualTo: 'accepted')
+                    .snapshots(),
+              ]),
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return Center(child: Text("Lỗi: ${snapshot.error}"));
+                }
+                if (!snapshot.hasData) {
+                  return Center(child: CircularProgressIndicator());
+                }
+
+                List<DocumentSnapshot> docs = [];
+                for (var querySnapshot in snapshot.data!) {
+                  docs.addAll(querySnapshot.docs);
+                }
+
+                if (docs.isEmpty) {
+                  return Center(child: Text("Bạn chưa có bạn bè nào"));
+                }
+
+                return ListView.builder(
+                  itemCount: docs.length,
+                  itemBuilder: (context, index) {
+                    var doc = docs[index];
+                    String friendId = doc['user1'] == widget.user.uid
+                        ? doc['user2']
+                        : doc['user1'];
+                    return FutureBuilder<DocumentSnapshot>(
+                      future: _firestore.collection('users').doc(friendId).get(),
+                      builder: (context, userSnapshot) {
+                        if (!userSnapshot.hasData) {
+                          return ListTile(title: Text("Đang tải..."));
+                        }
+                        var friendData = userSnapshot.data!.data() as Map<String, dynamic>;
+                        return ListTile(
+                          title: Text(friendData['displayName'] ?? 'Không tên'),
+                        );
+                      },
+                    );
+                  },
+                );
+              },
             ),
           ),
           // Phần hiển thị yêu cầu kết bạn

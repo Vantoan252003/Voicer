@@ -8,6 +8,8 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:rxdart/rxdart.dart';
 import 'dart:io';
+import 'showFriends.dart';
+import 'profile_page.dart';
 
 class VoiceScreen extends StatefulWidget {
   final User user;
@@ -25,6 +27,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
   FlutterSoundPlayer _player = FlutterSoundPlayer();
   String? _filePath;
   bool _isRecording = false;
+  bool _isPlaying = false;
 
   @override
   void initState() {
@@ -42,18 +45,12 @@ class _VoiceScreenState extends State<VoiceScreen> {
     }
   }
   Future<void> _saveUserInfo() async {
-    try {
       await _firestore.collection('users').doc(widget.user.uid).set({
         'displayName': widget.user.displayName,
         'email': widget.user.email,
         'photoURL': widget.user.photoURL,
       }, SetOptions(merge: true));
-    }
-    catch(e){
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Loi lưu thông tin người dùng: $e")),
-      );
-    }
+
   }
   Future<void> _addFriend(String friendEmail) async {
     if (friendEmail.isEmpty) {
@@ -62,7 +59,6 @@ class _VoiceScreenState extends State<VoiceScreen> {
       );
       return;
     }
-
     try {
       // Tìm người dùng theo email
       QuerySnapshot query = await _firestore
@@ -161,65 +157,36 @@ class _VoiceScreenState extends State<VoiceScreen> {
   void _showFriendSelection() {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text("Gửi cho ai?"),
-        content: StreamBuilder<List<QuerySnapshot>>(
-          stream: CombineLatestStream.list([
-            _firestore
-                .collection('friendships')
-                .where('user1', isEqualTo: widget.user.uid)
-                .where('status', isEqualTo: 'accepted')
-                .snapshots(),
-            _firestore
-                .collection('friendships')
-                .where('user2', isEqualTo: widget.user.uid)
-                .where('status', isEqualTo: 'accepted')
-                .snapshots(),
-          ]),
-          builder: (context, snapshot) {
-            if (snapshot.hasError) {
-              return Text("Lỗi: ${snapshot.error}");
-            }
-            if (!snapshot.hasData) {
-              return Center(child: CircularProgressIndicator());
-            }
-
-            List<DocumentSnapshot> docs = [];
-            for (var querySnapshot in snapshot.data!) {
-              docs.addAll(querySnapshot.docs);
-            }
-
-            if (docs.isEmpty) {
-              return Text("Bạn chưa có bạn bè nào!");
-            }
-
-            return SingleChildScrollView(
-              child: Column(
-                children: docs.map((doc) {
-                  String friendId = doc['user1'] == widget.user.uid
-                      ? doc['user2']
-                      : doc['user1'];
-                  return FutureBuilder<DocumentSnapshot>(
-                    future: _firestore.collection('users').doc(friendId).get(),
-                    builder: (context, userSnapshot) {
-                      if (!userSnapshot.hasData) {
-                        return ListTile(title: Text("Đang tải..."));
-                      }
-                      var friendData = userSnapshot.data!.data() as Map<String, dynamic>;
-                      return ListTile(
-                        title: Text(friendData['displayName'] ?? 'Không tên'),
-                        onTap: () {
-                          _sendMessage(friendId);
-                          Navigator.pop(context);
-                        },
-                      );
-                    },
-                  );
-                }).toList(),
+      builder: (context) => FriendSelectionDialog(
+        userId: widget.user.uid,
+        firestore: _firestore,
+        onSend: (List<String> friendIds) async {
+          // Hiển thị dialog loading
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => Dialog(
+              child: Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text("Đang gửi tin nhắn..."),
+                  ],
+                ),
               ),
-            );
-          },
-        ),
+            ),
+          );
+            // Gửi tin nhắn cho từng bạn
+            for (String friendId in friendIds) {
+              await _sendMessage(friendId);
+            }
+            // Đóng dialog loading và dialog chọn bạn bè
+            Navigator.pop(context); // Đóng dialog loading
+            Navigator.pop(context); // Đóng dialog chọn bạn bè
+        },
       ),
     );
   }
@@ -250,15 +217,10 @@ class _VoiceScreenState extends State<VoiceScreen> {
   }
 
   Future<void> _playMessage(String audioURL) async {
-    try {
-      await _player.startPlayer(fromURI: audioURL);
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Lỗi khi phát: $e")),
-      );
-    }
-  }
+    await _player.startPlayer(fromURI: audioURL);
+    setState(() => _isPlaying = true);
 
+  }
   Future<void> _signOut(BuildContext context) async {
     try {
       await FirebaseAuth.instance.signOut();
@@ -292,10 +254,35 @@ class _VoiceScreenState extends State<VoiceScreen> {
   @override
   Widget build(BuildContext context) {
     final TextEditingController friendEmailController = TextEditingController();
-
     return Scaffold(
       appBar: AppBar(
-        title: Text("Nhắn Âm - ${widget.user.displayName ?? 'Người dùng'}"),
+        leading: GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ProfilePage(user: widget.user),
+              ),
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(5.0),
+            child: CircleAvatar(
+              //dịch sang phải xíu
+              backgroundColor: Colors.grey[300],
+              backgroundImage: widget.user.photoURL != null
+                  ? NetworkImage(widget.user.photoURL!)
+                  : null,
+              child: widget.user.photoURL == null
+                  ? Icon(Icons.person)
+                  : null,
+              radius: 16,
+
+            ),
+
+          ),
+        ),
+        title: Text(" ${widget.user.displayName ?? 'Không tên'}"),
         actions: [
           IconButton(
             icon: Icon(Icons.logout),
@@ -304,6 +291,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
           ),
         ],
       ),
+
       body: Column(
         children: [
           // Phần thêm bạn
@@ -342,7 +330,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
             ),
           ),
           SizedBox(
-            height: 100,
+            height: 180,
             child: StreamBuilder<List<QuerySnapshot>>(
               stream: CombineLatestStream.list([
                 _firestore
@@ -357,9 +345,6 @@ class _VoiceScreenState extends State<VoiceScreen> {
                     .snapshots(),
               ]),
               builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return Center(child: Text("Lỗi: ${snapshot.error}"));
-                }
                 if (!snapshot.hasData) {
                   return Center(child: CircularProgressIndicator());
                 }
@@ -388,6 +373,10 @@ class _VoiceScreenState extends State<VoiceScreen> {
                         }
                         var friendData = userSnapshot.data!.data() as Map<String, dynamic>;
                         return ListTile(
+                          leading: CircleAvatar(
+                            backgroundImage: friendData['photoURL'] !=null ? NetworkImage(friendData['photoURL']) : null,
+                            child: friendData == null ? Icon (Icons.person) : null,
+                          ),
                           title: Text(friendData['displayName'] ?? 'Không tên'),
                         );
                       },
@@ -399,7 +388,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
           ),
           // Phần hiển thị yêu cầu kết bạn
           Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16.0),
+            padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
             child: Align(
               alignment: Alignment.centerLeft,
               child: Text(
@@ -409,7 +398,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
             ),
           ),
           SizedBox(
-            height: 100,
+            height: 80,
             child: StreamBuilder<QuerySnapshot>(
               stream: _firestore
                   .collection('friendships')
@@ -428,6 +417,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
                   return Center(child: Text("Không có yêu cầu kết bạn"));
                 }
                 return ListView.builder(
+
                   itemCount: requests.length,
                   itemBuilder: (context, index) {
                     var request = requests[index];
@@ -459,7 +449,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
             padding: EdgeInsets.all(16.0),
             child: ElevatedButton(
               onPressed: _isRecording ? _stopRecording : _startRecording,
-              child: Text(_isRecording ? "Dừng" : "Ghi âm (10s)"),
+              child: Icon(_isRecording ? Icons.stop : Icons.mic),
             ),
           ),
           // Danh sách tin nhắn
@@ -499,7 +489,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
                           title: Text("Từ $senderName"),
                           subtitle: Text("Tin nhắn âm thanh"),
                           trailing: IconButton(
-                            icon: Icon(Icons.play_arrow),
+                            icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
                             onPressed: () => _playMessage(audioURL),
                           ),
                         );

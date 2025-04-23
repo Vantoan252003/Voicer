@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'change_profile.dart';
 class ProfilePage extends StatefulWidget {
   final User user;
@@ -61,9 +62,14 @@ class _ProfilePageState extends State<ProfilePage> {
                   style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 ),
                 SizedBox(height: 8),
-                Text(
-                  widget.user.email ?? "Không có email",
-                  style: TextStyle(fontSize: 16),
+                // chưc nang thay đổi tên
+                InkWell(
+                  onTap: (){
+                  },
+                  child: Text(
+                    "Thay đổi tên",
+                    style: TextStyle(color: Colors.blue),
+                  ),
                 ),
                 Divider(height: 32),
                 ListTile(
@@ -83,6 +89,15 @@ class _ProfilePageState extends State<ProfilePage> {
                       ? "Đã xác thực"
                       : "Chưa xác thực"),
                 ),
+                ListTile(
+                  leading: Icon(Icons.logout),
+                  title: Text("Đăng xuất"),
+                  onTap: () async{
+                    await FirebaseAuth.instance.signOut();
+                    await GoogleSignIn().signOut();
+                    Navigator.of(context).pop();
+                  }
+                )
               ],
             ),
           );

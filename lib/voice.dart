@@ -3,19 +3,17 @@ import 'package:flutter_sound/flutter_sound.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:rxdart/rxdart.dart';
+import 'package:voicer/chat.dart';
+import 'package:voicer/friend_list.dart';
 import 'dart:io';
 import 'showFriends.dart';
 import 'profile_page.dart';
 
 class VoiceScreen extends StatefulWidget {
   final User user;
-  final bool showLoginSuccess;
-  VoiceScreen({required this.user, this.showLoginSuccess = false});
-
+  VoiceScreen({required this.user});
   @override
   _VoiceScreenState createState() => _VoiceScreenState();
 }
@@ -36,13 +34,6 @@ class _VoiceScreenState extends State<VoiceScreen> {
     _player.openPlayer();
     _saveUserInfo();
 
-    if (widget.showLoginSuccess) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Đã đăng nhập thành công!")),
-        );
-      });
-    }
   }
   Future<void> _saveUserInfo() async {
       await _firestore.collection('users').doc(widget.user.uid).set({
@@ -72,7 +63,6 @@ class _VoiceScreenState extends State<VoiceScreen> {
         );
         return;
       }
-
       String friendId = query.docs.first.id;
       if (friendId == widget.user.uid) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -179,63 +169,38 @@ class _VoiceScreenState extends State<VoiceScreen> {
               ),
             ),
           );
-            // Gửi tin nhắn cho từng bạn
-            for (String friendId in friendIds) {
-              await _sendMessage(friendId);
-            }
-            // Đóng dialog loading và dialog chọn bạn bè
-            Navigator.pop(context); // Đóng dialog loading
+            // Upload file ghi âm 1 lần
+            if (_filePath == null) return;
+            String messageId = _firestore.collection('messages').doc().id;
+            String storePath = 'audio/$messageId/voice.aac';
+            File file = File(_filePath!);
+            UploadTask task = _storage.ref(storePath).putFile(file);
+            TaskSnapshot snapshot = await task;
+            String audioURL = await snapshot.ref.getDownloadURL();
+
+            // Gửi song song tin nhắn cho tất cả bạn bè
+            await Future.wait(friendIds.map((friendId) {
+              return _firestore.collection('messages').add({
+                'senderId': widget.user.uid,
+                'receiverId': friendId,
+                'audioURL': audioURL,
+                'timestamp': FieldValue.serverTimestamp(),
+              });
+            }));
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text("Gửi thành công")),
+            );
+            Navigator.pop(context); // Đóng loading
             Navigator.pop(context); // Đóng dialog chọn bạn bè
         },
       ),
     );
   }
-
-  Future<void> _sendMessage(String friendId) async {
-    if (_filePath == null) return;
-    try {
-      String messageId = _firestore.collection('messages').doc().id;
-      String storePath = 'audio/$messageId/voice.aac';
-      File file = File(_filePath!);
-      UploadTask task = _storage.ref(storePath).putFile(file);
-      TaskSnapshot snapshot = await task;
-      String audioURL = await snapshot.ref.getDownloadURL();
-      await _firestore.collection('messages').doc(messageId).set({
-        'senderId': widget.user.uid,
-        'receiverId': friendId,
-        'audioURL': audioURL,
-        'timestamp': FieldValue.serverTimestamp(),
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Gửi thành công")),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Lỗi khi gửi tin nhắn: $e")),
-      );
-    }
-  }
-
   Future<void> _playMessage(String audioURL) async {
     await _player.startPlayer(fromURI: audioURL);
     setState(() => _isPlaying = true);
 
   }
-  Future<void> _signOut(BuildContext context) async {
-    try {
-      await FirebaseAuth.instance.signOut();
-      await GoogleSignIn().signOut();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Đã đăng xuất")),
-      );
-    } catch (e) {
-      print("Lỗi đăng xuất: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Lỗi đăng xuất: $e")),
-      );
-    }
-  }
-
   Future<void> _acceptFriend(String friendshipId) async {
     try {
       await _firestore.collection('friendships').doc(friendshipId).update({
@@ -277,21 +242,17 @@ class _VoiceScreenState extends State<VoiceScreen> {
                   ? Icon(Icons.person)
                   : null,
               radius: 16,
-
             ),
-
           ),
         ),
         title: Text(" ${widget.user.displayName ?? 'Không tên'}"),
         actions: [
           IconButton(
-            icon: Icon(Icons.logout),
-            onPressed: () => _signOut(context),
-            tooltip: "Đăng xuất",
+            icon: Icon(Icons.people),
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => FriendListWidget(userId: widget.user.uid, firestore: _firestore))),
           ),
         ],
       ),
-
       body: Column(
         children: [
           // Phần thêm bạn
@@ -316,74 +277,6 @@ class _VoiceScreenState extends State<VoiceScreen> {
                   child: Text("Thêm bạn"),
                 ),
               ],
-            ),
-          ),
-          // Phần hiển thị danh sách bạn bè
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16.0),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                "Danh sách bạn bè",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ),
-          SizedBox(
-            height: 180,
-            child: StreamBuilder<List<QuerySnapshot>>(
-              stream: CombineLatestStream.list([
-                _firestore
-                    .collection('friendships')
-                    .where('user1', isEqualTo: widget.user.uid)
-                    .where('status', isEqualTo: 'accepted')
-                    .snapshots(),
-                _firestore
-                    .collection('friendships')
-                    .where('user2', isEqualTo: widget.user.uid)
-                    .where('status', isEqualTo: 'accepted')
-                    .snapshots(),
-              ]),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return Center(child: CircularProgressIndicator());
-                }
-
-                List<DocumentSnapshot> docs = [];
-                for (var querySnapshot in snapshot.data!) {
-                  docs.addAll(querySnapshot.docs);
-                }
-
-                if (docs.isEmpty) {
-                  return Center(child: Text("Bạn chưa có bạn bè nào"));
-                }
-
-                return ListView.builder(
-                  itemCount: docs.length,
-                  itemBuilder: (context, index) {
-                    var doc = docs[index];
-                    String friendId = doc['user1'] == widget.user.uid
-                        ? doc['user2']
-                        : doc['user1'];
-                    return FutureBuilder<DocumentSnapshot>(
-                      future: _firestore.collection('users').doc(friendId).get(),
-                      builder: (context, userSnapshot) {
-                        if (!userSnapshot.hasData) {
-                          return ListTile(title: Text("Đang tải..."));
-                        }
-                        var friendData = userSnapshot.data!.data() as Map<String, dynamic>;
-                        return ListTile(
-                          leading: CircleAvatar(
-                            backgroundImage: friendData['photoURL'] !=null ? NetworkImage(friendData['photoURL']) : null,
-                            child: friendData == null ? Icon (Icons.person) : null,
-                          ),
-                          title: Text(friendData['displayName'] ?? 'Không tên'),
-                        );
-                      },
-                    );
-                  },
-                );
-              },
             ),
           ),
           // Phần hiển thị yêu cầu kết bạn

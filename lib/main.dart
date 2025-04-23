@@ -30,9 +30,7 @@ class AuthWrapper extends StatelessWidget{
         if (snapshot.hasData){
           return VoiceScreen(
             user: snapshot.data!,
-            showLoginSuccess: true,
           );
-
         }
         return LoginPage();
       },

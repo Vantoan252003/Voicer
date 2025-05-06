@@ -2,13 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+
 class ChatScreen extends StatefulWidget {
   final String currentUserId;
   final String friendId;
   final String friendName;
   final String? friendPhotoURL;
 
-  ChatScreen({
+  const ChatScreen({
+    super.key,
     required this.currentUserId,
     required this.friendId,
     required this.friendName,
@@ -42,7 +44,7 @@ class _ChatScreenState extends State<ChatScreen> {
     });
 
     try {
-      await _firestore.collection('messages').add({
+      await _firestore.collection('messagesChat').add({
         'chatId': chatId,
         'senderId': widget.currentUserId,
         'receiverId': widget.friendId,
@@ -62,11 +64,10 @@ class _ChatScreenState extends State<ChatScreen> {
           );
         }
       });
-
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Lỗi khi gửi tin nhắn: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Lỗi khi gửi tin nhắn: $e')));
     } finally {
       setState(() {
         _isLoading = false;
@@ -83,11 +84,12 @@ class _ChatScreenState extends State<ChatScreen> {
         title: Row(
           children: [
             CircleAvatar(
-              backgroundImage: widget.friendPhotoURL != null
-                  ? NetworkImage(widget.friendPhotoURL!)
-                  : null,
-              child: widget.friendPhotoURL == null ? Icon(Icons.person) : null,
+              backgroundImage:
+                  widget.friendPhotoURL != null
+                      ? NetworkImage(widget.friendPhotoURL!)
+                      : null,
               radius: 18,
+              child: widget.friendPhotoURL == null ? Icon(Icons.person) : null,
             ),
             SizedBox(width: 8),
             Text(widget.friendName),
@@ -99,14 +101,17 @@ class _ChatScreenState extends State<ChatScreen> {
           // Danh sách tin nhắn
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: _firestore
-                  .collection('messages')
-                  .where('chatId', isEqualTo: chatId)
-                  .orderBy('timestamp', descending: true)
-                  .snapshots(),
+              stream:
+                  _firestore
+                      .collection('messagesChat')
+                      .where('chatId', isEqualTo: chatId)
+                      .orderBy('timestamp', descending: true)
+                      .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
-                  return Center(child: Text('Đã xảy ra lỗi: ${snapshot.error}'));
+                  return Center(
+                    child: Text('Đã xảy ra lỗi: ${snapshot.error}'),
+                  );
                 }
 
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -124,19 +129,24 @@ class _ChatScreenState extends State<ChatScreen> {
                   reverse: true, // Hiển thị tin nhắn mới nhất ở dưới cùng
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
-                    var message = messages[index].data() as Map<String, dynamic>;
+                    var message =
+                        messages[index].data() as Map<String, dynamic>;
                     bool isMe = message['senderId'] == widget.currentUserId;
 
                     return Padding(
                       padding: EdgeInsets.symmetric(vertical: 4, horizontal: 8),
                       child: Align(
-                        alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                        alignment:
+                            isMe ? Alignment.centerRight : Alignment.centerLeft,
                         child: Container(
                           decoration: BoxDecoration(
                             color: isMe ? Colors.blue[100] : Colors.grey[200],
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          padding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                          padding: EdgeInsets.symmetric(
+                            vertical: 12,
+                            horizontal: 12,
+                          ),
                           constraints: BoxConstraints(
                             maxWidth: MediaQuery.of(context).size.width * 0.7,
                           ),
@@ -147,7 +157,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                 message['text'] ?? '',
                                 style: TextStyle(fontSize: 16),
                               ),
-                              SizedBox(height: 2),
+                              SizedBox(height: 4),
                               Text(
                                 message['timestamp'] != null
                                     ? _formatTimestamp(message['timestamp'])
@@ -170,7 +180,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
           // Phần nhập tin nhắn
           Container(
-            padding: EdgeInsets.symmetric(horizontal: 8),
+            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 16),
             decoration: BoxDecoration(
               color: Colors.white,
               boxShadow: [
@@ -194,16 +204,18 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 ),
                 IconButton(
-                  icon: _isLoading
-                      ? SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2)
-                  )
-                      : Icon(Icons.send),
-                  onPressed: _isLoading
-                      ? null
-                      : () => _sendMessage(_textController.text),
+                  icon:
+                      _isLoading
+                          ? SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                          : Icon(Icons.send),
+                  onPressed:
+                      _isLoading
+                          ? null
+                          : () => _sendMessage(_textController.text),
                 ),
               ],
             ),
@@ -217,8 +229,7 @@ class _ChatScreenState extends State<ChatScreen> {
     DateTime dateTime = timestamp.toDate();
     DateTime now = DateTime.now();
 
-    if (now.difference(dateTime).inHours < 24 &&
-        now.day == dateTime.day) {
+    if (now.difference(dateTime).inHours < 24 && now.day == dateTime.day) {
       return '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
     } else {
       return '${dateTime.day}/${dateTime.month} ${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';

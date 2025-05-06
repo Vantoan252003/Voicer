@@ -8,6 +8,7 @@ class FriendSelectionDialog extends StatefulWidget {
   final Future<void> Function(List<String>) onSend;
 
   const FriendSelectionDialog({
+    super.key,
     required this.userId,
     required this.firestore,
     required this.onSend,
@@ -39,7 +40,9 @@ class _FriendSelectionDialogState extends State<FriendSelectionDialog> {
                 .where('user2', isEqualTo: widget.userId)
                 .where('status', isEqualTo: 'accepted')
                 .snapshots(),
-          ]).map((list) => list.cast<QuerySnapshot>()), // Ép kiểu List<dynamic> thành List<QuerySnapshot>
+          ]).map(
+            (list) => list.cast<QuerySnapshot>(),
+          ), // Ép kiểu List<dynamic> thành List<QuerySnapshot>
           builder: (context, snapshot) {
             if (snapshot.hasError) {
               return Text("Lỗi: ${snapshot.error}");
@@ -68,13 +71,17 @@ class _FriendSelectionDialogState extends State<FriendSelectionDialog> {
                       onPressed: () {
                         setState(() {
                           selectAll = !selectAll;
-                          selectedFriends = selectAll
-                              ? docs
-                              .map((doc) => doc['user1'] == widget.userId
-                              ? doc['user2'] as String
-                              : doc['user1'] as String)
-                              .toList()
-                              : [];
+                          selectedFriends =
+                              selectAll
+                                  ? docs
+                                      .map(
+                                        (doc) =>
+                                            doc['user1'] == widget.userId
+                                                ? doc['user2'] as String
+                                                : doc['user1'] as String,
+                                      )
+                                      .toList()
+                                  : [];
                         });
                       },
                       child: Text(selectAll ? "Bỏ chọn tất cả" : "Chọn tất cả"),
@@ -87,23 +94,35 @@ class _FriendSelectionDialogState extends State<FriendSelectionDialog> {
                     itemCount: docs.length,
                     itemBuilder: (context, index) {
                       var doc = docs[index];
-                      String friendId = doc['user1'] == widget.userId
-                          ? doc['user2'] as String
-                          : doc['user1'] as String;
+                      String friendId =
+                          doc['user1'] == widget.userId
+                              ? doc['user2'] as String
+                              : doc['user1'] as String;
                       return FutureBuilder<DocumentSnapshot>(
-                        future: widget.firestore.collection('users').doc(friendId).get(),
+                        future:
+                            widget.firestore
+                                .collection('users')
+                                .doc(friendId)
+                                .get(),
                         builder: (context, userSnapshot) {
                           if (!userSnapshot.hasData) {
                             return const ListTile(title: Text("Đang tải..."));
                           }
                           if (userSnapshot.hasError) {
-                            return ListTile(title: Text("Lỗi: ${userSnapshot.error}"));
+                            return ListTile(
+                              title: Text("Lỗi: ${userSnapshot.error}"),
+                            );
                           }
-                          var friendData = userSnapshot.data!.data() as Map<String, dynamic>?;
+                          var friendData =
+                              userSnapshot.data!.data()
+                                  as Map<String, dynamic>?;
                           if (friendData == null) {
-                            return const ListTile(title: Text("Không tìm thấy bạn bè"));
+                            return const ListTile(
+                              title: Text("Không tìm thấy bạn bè"),
+                            );
                           }
-                          String friendName = friendData['displayName'] ?? 'Không tên';
+                          String friendName =
+                              friendData['displayName'] ?? 'Không tên';
                           bool isSelected = selectedFriends.contains(friendId);
 
                           return CheckboxListTile(
@@ -116,7 +135,8 @@ class _FriendSelectionDialogState extends State<FriendSelectionDialog> {
                                 } else {
                                   selectedFriends.remove(friendId);
                                 }
-                                selectAll = selectedFriends.length == docs.length;
+                                selectAll =
+                                    selectedFriends.length == docs.length;
                               });
                             },
                           );
@@ -136,9 +156,10 @@ class _FriendSelectionDialogState extends State<FriendSelectionDialog> {
           child: const Text("Hủy"),
         ),
         ElevatedButton(
-          onPressed: selectedFriends.isEmpty
-              ? null
-              : () => widget.onSend(selectedFriends),
+          onPressed:
+              selectedFriends.isEmpty
+                  ? null
+                  : () => widget.onSend(selectedFriends),
           child: const Text("Gửi"),
         ),
       ],
